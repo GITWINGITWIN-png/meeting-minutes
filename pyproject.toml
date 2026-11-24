@@ -1,0 +1,60 @@
+[project]
+name = "meeting-minutes"
+version = "0.1.0"
+description = "Turn Thai meeting audio into structured meeting minutes, locally on GPU."
+requires-python = ">=3.12,<3.13"
+
+dependencies = [
+    # ASR. transformers runs the Typhoon/Whisper checkpoints directly, which
+    # avoids the CTranslate2 conversion step faster-whisper would need and
+    # sidesteps its patchy sm_120 (Blackwell) support.
+    "transformers>=4.44",
+    "accelerate>=0.33",
+    # See the GPU wheels note at the bottom for why 2.11 is the floor.
+    "torch>=2.11",
+    "torchaudio>=2.11",
+    # Speaker diarization. 4.0+ is required, not optional: 3.x calls
+    # `torchaudio.AudioMetaData` and `torchaudio.info` at import time, and
+    # torchaudio removed both in 2.9.
+    "pyannote-audio>=4.0,<5",
+    # Reading the decoded 16 kHz mono wav back into a numpy array.
+    "soundfile>=0.12",
+    # Summarization via the user's Claude Code login (no separate API key).
+    "claude-agent-sdk>=0.2",
+]
+
+[project.scripts]
+meeting-minutes = "meeting_minutes.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/meeting_minutes"]
+
+# --- GPU wheels -------------------------------------------------------------
+# There is deliberately no custom index here any more, and that is worth
+# recording because this project started with one.
+#
+# The RTX 50-series is Blackwell (sm_120), which needs CUDA 12.8 or newer. When
+# this was written the PyPI wheels were still built against CUDA 12.6 and died
+# with "no kernel image is available for execution on the device", so torch and
+# torchaudio were pulled from PyTorch's own cu128 index instead.
+#
+# As of torch 2.11 the PyPI default is built against CUDA 13, which covers
+# sm_120 on its own — the pin had outlived its reason. Keeping it was actively
+# harmful: PyTorch stopped publishing cu128 builds of torchcodec after 0.11.1,
+# so the pinned CUDA and torchcodec's CUDA drifted apart, and torchcodec failed
+# to load its native libraries. That breaks transcription, not just diarization,
+# because transformers imports torchcodec whenever the package is merely
+# present. Letting every wheel come from PyPI keeps their CUDA versions
+# agreeing by construction.
+#
+# `torch>=2.11` is therefore a real floor, not a nicety: below it PyPI resolves
+# to a CUDA 12 build that cannot serve this card and cannot match torchcodec.
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

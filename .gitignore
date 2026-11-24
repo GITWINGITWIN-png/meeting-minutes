@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+
+# Pipeline artifacts: audio in, transcripts and minutes out.
+out/
+*.wav
+*.m4a
+*.mp3
+
+# HF token lives here; never commit it.
+.env
